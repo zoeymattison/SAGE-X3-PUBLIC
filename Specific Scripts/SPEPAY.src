@@ -1,0 +1,109 @@
+
+######################################################################################
+## Modified: 2023-10-05                                                             ##
+## Author (Company): TAC                                                            ##
+## Notes: ACTION modifications made in YSPEPAY                                      ##
+######################################################################################
+## VERIF_CRE in YSPEPAY                                                             ##
+## VERIF_MOD in YSPEPAY                                                             ##
+######################################################################################
+
+$ACTION
+  Case ACTION
+    When "VERIF_CRE" : Gosub UPDSEBPC From YSPEPAY : Gosub UNIQUE_REF
+    When "VERIF_MOD" : Gosub UPDSEBPC From YSPEPAY
+    When "STYLE" : Gosub STYLE
+    When Default
+  Endcase
+Return
+
+$STYLE
+######################################################################################
+## When the record is opened, display the original customer in a new field          ##
+## Date Created: 2024-01-09                                                         ##
+## Date Modified: 2024-01-10                                                        ##
+## Author (Company): MOZM (Monk Office)                                             ##
+## Notes: 1. Disregard InfoPOS records. Most do not contain PAY1 mask.              ##
+##        2. Disregard sales order prepayments until end & use INTFLD only (they do ##
+##           not exist in GACCENTRYD)                                               ##
+##        3. Use GACCENTRYD table for all other records except V5555 vendor code.   ##
+##        4. If V5555, use PIVOICED & pull BP from associated PINVOICED NUMORI doc. ##
+######################################################################################
+
+If !Clalev([ZPI]) : Local File PINVOICED[ZPI] : Endif
+If !Clalev([ZPH]) : Local File PINVOICE[ZPH] : Endif
+If !Clalev([ZGA]) : Local File GACCENTRYD[ZGA] : Endif
+If !pat([M:PAY0]NUM, 'IP*') 
+    For i = 0 to [M:PAY1]NBLIG-1
+        If (!pat([M:PAY1]VCRNUM(i), 'ORD*') & !pat([M:PAY1]VCRNUM(i), 'BTS*') & !pat([M:PAY1]VCRNUM(i), 'WEB*'))
+            Filter [ZGA] Where TYP = [M:PAY1]VCRTYP(i) & NUM = [M:PAY1]VCRNUM(i)
+            Read [ZGA] First
+            If fstat = 0
+                If [ZGA]BPR <> 'V5555'
+                    [M:PAY1]ZOKYAKU(i) = [ZGA]BPR + ' - ' + func AFNC.INTFLD('BPARTNER','BPRNAM',[ZGA]BPR)
+                    Affzo [M:PAY1]ZOKYAKU(i)
+                Endif
+                If [ZGA]BPR = 'V5555' & pat([M:PAY1]VCRNUM(i), 'P*')    
+                    Filter [ZPI] Where NUM = [M:PAY1]VCRNUM(i) & NUMORI <> ''
+                    Read [ZPI] first
+                    If fstat = 0
+                        [M:PAY1]ZOKYAKU(i) = func AFNC.INTFLD('PRECEIPT','BPSNUM',[ZPI]NUMORI)+' - '+func AFNC.INTFLD('BPARTNER','BPRNAM',func AFNC.INTFLD('PRECEIPT','BPSNUM',[ZPI]NUMORI))
+                        Affzo [M:PAY1]ZOKYAKU(i)
+                    Endif 
+                Endif
+                If [ZGA]BPR = 'V5555' & pat([M:PAY1]VCRNUM(i), 'D*')   
+                    Filter [ZPH] Where NUM = [M:PAY1]VCRNUM(i)
+                    Read [ZPH] first
+                    If fstat = 0
+                        [M:PAY1]ZOKYAKU(i) = 'DIRECT - '+[ZPH]BPR+' - '+[ZPH]BPRVCR+' - '+[ZPH]DES
+                        Affzo [M:PAY1]ZOKYAKU(i)
+                    Endif 
+                Endif
+            Endif 
+        Else
+            [M:PAY1]ZOKYAKU(i) = func AFNC.INTFLD('SORDER','BPCINV',[M:PAY1]VCRNUM(i)+'~')+' - '+func AFNC.INTFLD('SORDER','BPINAM',[M:PAY1]VCRNUM(i)+'~')
+            Affzo [M:PAY1]ZOKYAKU(i)
+        Endif
+    Next
+Endif
+
+# それはコードは大変ですよね~マジでね。びっくりさせています。でも、うまくいきました。私はうれしい。
+Return
+
+Subprog AS_BAN(VALEUR)
+Variable Char    VALEUR()
+Case GFLAG
+ When "EFT" : [M:PAY1]BAN = 'BANK1' : Affzo [M:PAY1]BAN
+ When "PAYCC" : [M:PAY1]BAN = 'BANK5' : Affzo [M:PAY1]BAN
+ When "PAYET" : Gosub USD_SEL
+ When default
+Endcase
+End
+
+$USD_SEL
+If func AFNC.INTFLD('BPADDRESS','CRY',num$(1)+'~'+[M:PAY1]BPR+'~'+[M:PAY1]BPAINV) = 'US'
+ [M:PAY1]BAN = 'BANK3'
+Else
+ [M:PAY1]BAN = 'BANK1'
+Endif
+Affzo [M:PAY1]BAN
+End
+
+$UNIQUE_REF
+If pat([M:PAY1]REF, 'CB000*') or GUSER = "INFP"
+
+Local File PAYMENTH[ZPY]
+Columns [ZPY] (NUM, REF)
+Filter [ZPY] Where REF = [M:PAY1]REF
+Read [ZPY] First
+If !Fstat # record already exists
+
+Gosub ABANDON From GOBJSUB
+Gosub SETBOUT From GOBJSUB
+
+Endif
+Columns [ZPY]
+Filter [ZPY]
+LogicClose File [ZPY]
+Endif
+Return

@@ -1,0 +1,9 @@
+Subprog AM_ZSUPPLIER(VALEUR)
+Variable Char    VALEUR()
+For i = 0 to [M:PCL]NBLIG-1
+ If [M:PCL]BPRPAY(i) = VALEUR
+  [M:PCL]SELEC(i) = 1
+  Affzo [M:PCL]SELEC(i)
+ Endif
+Next
+End

@@ -1,0 +1,9 @@
+$ACTION
+  Case ACTION
+    When "SETBOUT" : Gosub SETBOUT
+  Endcase  
+Return
+
+$SETBOUT
+   CHAINE +="zZ"
+Return

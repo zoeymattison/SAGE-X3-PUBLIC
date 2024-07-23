@@ -1,0 +1,35 @@
+$ACTION
+#If GUSER="MOZM" : Infbox "SPEPIH "-ACTION : Endif
+Case ACTION
+  When "SETBOUT" : Gosub SETBOUT
+  When "VERIF_CRE" : Gosub VERIF_CRE
+  When default
+Endcase
+Return
+
+
+$SETBOUT
+Local File PINVOICE[ZPI]
+Columns [ZPI] (NUM, PAZ)
+If [M:PIH0]NUM<>""
+  Read [ZPI]PIH0 = [M:PIH0]NUM
+  If !Fstat
+    If [F:ZPI]PAZ <> 4
+      CHMEN+="3B"
+      If val(func AFNC.INTFLD("AUTILIS","ZPAYAUT",GUSER))=2
+        CHMEN+="3c"
+      Endif
+    Endif
+  Endif
+Endif
+LogicClose File [ZPI]
+Return
+
+$VERIF_CRE
+If func AFNC.INTFLD("BPSUPPLIER","ZBPSAPP",[M:PIH0]BPR) <> "" and ([M:PIH0]PIVTYP = "DIR" OR [M:PIH0]PIVTYP = "INV")
+  [M:PIH0]PAZ = 1
+Else
+  [M:PIH0]PAZ = 4
+Endif
+Affzo [M:PIH0]PAZ
+Return

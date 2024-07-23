@@ -1,0 +1,14 @@
+$ACTION
+Case ACTION
+ When "STYLE" : gosub STYLE
+ When default
+Endcase
+Return
+
+$STYLE
+local integer i 
+       for i = 0 to [M:PNH1]NBLIG - 1
+        [M:PNH1]ZBPSITM(i)=func AFNC.INTFLD('ITMBPS','ITMREFBPS',[M:PNH1]ITMREF(i)+'~'+[M:PNH1]BPSNUM)
+        Affzo [M:PNH1]ZBPSITM(i)
+       next
+Return

@@ -1,0 +1,93 @@
+$ACTION
+Case ACTION
+    When default
+Endcase
+Return
+
+#####################################################################################
+##                                                                                 ##
+## SCRIPT            : MASK MANAGEMENT FOR SPEENT AUTOMATIC PROCESSING             ##
+## CREATION DATE     : 08/31/2023                                                  ##
+## UPDATED           : 03/20/2024                                                  ##
+## VERSION           : 2.0.0                                                       ##
+## AUTHORS (COMPANY) : ZOEY MATTISON (MONK OFFICE)                                 ##
+## MODULE            : SUPERVISOR - MASK MANAGEMENT                                ##
+## ----------------------------------------------------------------------------    ##
+## PROJECT CODE      : MONK OFFICE SPECIFIC CUSTOMIZATIONS                         ##
+## DESCRIPTION       : Automatically parses and inserts a location for any given   ##
+##                     product when doing receipt entry for store transfers        ##
+##                                                                                 ##
+#####################################################################################
+
+Subprog AP_STA(VALEUR)
+Variable Char   VALEUR()
+If VALEUR = 'A' and [M:ENT]STOFCY = 'DC30'
+    If !clalev([ZPPL]) : Local File PPRICLIST[ZPPL] : Endif
+    If !clalev([ZST]) : Local File STOCK[ZST] : Endif
+    If !clalev([ZSL]) : Local File STOLOC[ZSL] : Endif
+    If !clalev([ZSL2]) : Local File STOLOC[ZSL2] : Endif
+    If !clalev([ZIF]) : Local File ITMFACILIT[ZIF] : Endif
+    if !Clalev([ZSLR]) : Local File STOLOCRES[ZSLR] : Endif
+
+    Local Char ZLRES(20)(1..)
+    Local Integer ZLI : ZLI = 1
+    Local Integer NOL : NOL = nolign-1
+    Local Char ZDEF : ZDEF = func AFNC.INTFLD('ITMFACILIT','DEFLOC(1)',[M:ENT]ITMREF(NOL)+'~'+[M:ENT]STOFCY)
+
+    Local Char ZSET_LOC
+    Local Char ZSET_LOCTYP
+    Local Char ZSET_STA
+
+    For [ZSLR]
+        ZLRES(ZLI) = [ZSLR]LOC
+        ZLI = ZLI + 1
+    Next
+
+    Filter [ZST] Where STOFCY = [M:ENT]STOFCY and ITMREF = [M:ENT]ITMREF(NOL) and STA = 'A'
+    Filter [ZSL] Where STOFCY = [M:ENT]STOFCY and !find(LOC,ZLRES) and (LOCTYP = 'WHS1') and LOC >= '23A1A' and OCPCOD = 1
+    Filter [ZSL2] Where LOC = ZDEF and STOFCY = [M:ENT]STOFCY and (OCPCOD = 1 OR MONITMFLG = 1)
+
+    Read [ZST] first # check for an existing stock record
+    If Fstat # no record
+        Goto DEF_SEL # select the default location
+    Else
+        ZSET_LOC = [ZST]LOC
+        ZSET_LOCTYP = [ZST]LOCTYP
+        ZSET_STA = 'A'
+        Goto SET_FIELD
+    Endif
+Endif
+End
+
+$DEF_SEL
+Read [ZSL2] first # read the defacult loation check that it is not in use
+If Fstat
+    Goto LOC_SEL
+Else
+    ZSET_LOC = [ZSl2]LOC
+    ZSET_LOCTYP = [ZSL2]LOCTYP
+    ZSET_STA = 'A'
+    Goto SET_FIELD
+Endif
+End
+
+$LOC_SEL
+Read [ZSL] first # Read the first available open location
+If Fstat
+    Infbox 'No locations available'
+    End
+Else
+    ZSET_LOC = [ZSL]LOC
+    ZSET_LOCTYP = [ZSL]LOCTYP
+    ZSET_STA = 'A'
+    Goto SET_FIELD
+Endif
+End
+
+$SET_FIELD
+    [M:ENT]STA(NOL) = ZSET_STA : Affzo [M:ENT]STA(NOL)
+    [M:ENT]LOCTYP(NOL) = ZSET_LOCTYP : Affzo [M:ENT]LOCTYP(NOL)
+    [M:ENT]LOC(NOL) = ZSET_LOC : Affzo [M:ENT]LOC(NOL)
+
+Raz ZSET_LOC, ZSET_LOCTYP, ZSET_STA, ZLRES
+End

@@ -1,0 +1,24 @@
+$ACTION
+  Gosub ACTION from YSPEITM
+
+Case ACTION
+ When "VERIF_MOD" : Gosub PRIO : Gosub DISCONTINUATION from ZS_MONK
+ When "VERIF_CRE" : Gosub PRIO
+ When default
+Endcase
+Return
+
+
+$PRIO
+Local Char ZIDENT : ZIDENT = "ITMPRIO"
+Local Integer ZPIO : ZPIO = 0
+For i = 0 to [M:ITP]NBITP - 1
+ If [M:ITP]PIO(i) = 0
+  ZPIO = ZPIO + 1
+ Endif
+Next
+If ZPIO > 1
+ Call ZMAIL(ZIDENT) from ZMAIL
+Endif
+Raz ZPIO
+return

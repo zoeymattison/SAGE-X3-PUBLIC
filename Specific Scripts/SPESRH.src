@@ -1,0 +1,178 @@
+$ACTION
+Case ACTION
+    When 'VERIF_CRE' : Gosub ZCANCEL
+    When 'APRES_CRE' : Gosub PRINTRTN
+    When default
+Endcase
+Return
+
+######################################################################################
+## Update purchase cost of MOT items when doing returns                             ##
+## Created: 07-21.23                                                                ##
+## Author: Zoey Mattison                                                            ##
+##                                                                                  ##
+## // Update 2023-08-31 //                                                          ##
+## Added autofill for status, location type and location to skip put-away           ## 
+##                                                                                  ##
+## // Update 2023-09-06 //                                                          ##
+## Consolidated code to work for all DCs (MOZM ONLY), and added autofill for        ##
+## credit memo = yes flag (RTNCNOFLG)                                               ##
+##                                                                                  ##
+## // Update 2023-09-11 //                                                          ##
+## Added autofill for Stock Update Flag = no(RTNSTOUPD) if VALEUR = DEF or DAM      ##
+##                                                                                  ##
+## // Update 2024-03-27 //                                                          ##
+## Completely re-wrote logic to take into account the default bin setting and bin   ##
+## location reservation found inside the STOLOCRES database table                   ##
+##                                                                                  ##
+## // Update 2024-03-27 //                                                          ##
+## Added action flags to QTY and RTNREN for the specific processing of LOAN returns ##
+## Returns entered by MOAT and MORHB will autofill specifics related to that proc-  ##
+## ess, such as XMACHIN bin and MOT return reason.                                  ##
+######################################################################################
+
+Subprog AM_RTNREN(VALEUR)
+Variable Char    VALEUR()
+If (GUSER = 'MOKH')
+    If !clalev([ZPPL]) : Local File PPRICLIST[ZPPL] : Endif
+    If !clalev([ZST]) : Local File STOCK[ZST] : Endif
+    If !clalev([ZSL]) : Local File STOLOC[ZSL] : Endif
+    If !clalev([ZSL2]) : Local File STOLOC[ZSL2] : Endif
+    if !Clalev([ZSLR]) : Local File STOLOCRES[ZSLR] : Endif
+
+    Local Char ZLRES(20)(1..)
+    Local Integer ZLI : ZLI = 1
+    Local Integer NOL : NOL = nolign-1
+    Local Char ZDEF : ZDEF = func AFNC.INTFLD('ITMFACILIT','DEFLOC(1)',[M:SRH1]ITMREF(NOL)+'~'+[M:SRH0]STOFCY)
+
+    Local Char ZSET_LOC
+    Local Char ZSET_LOCTYP
+    Local Char ZSET_STA
+
+    For [ZSLR]
+        ZLRES(ZLI) = [ZSLR]LOC
+        ZLI = ZLI + 1
+    Next
+
+    Filter [ZST] Where STOFCY = [M:SRH0]STOFCY and ITMREF = [M:SRH1]ITMREF(NOL) and STA = 'A'
+    Filter [ZSL] Where STOFCY = [M:SRH0]STOFCY and !find(LOC,ZLRES) and (LOCTYP = 'WHS1') and LOC >= '23A1A' and OCPCOD = 1
+    Filter [ZSL2] Where LOC = ZDEF and STOFCY = [M:SRH0]STOFCY and (OCPCOD = 1 OR MONITMFLG = 1)
+
+    Read [ZST] first # check for an existing stock record
+    If Fstat # no record
+        Goto DEF_SEL # select the default location
+    Else
+        ZSET_LOC = [ZST]LOC
+        ZSET_LOCTYP = [ZST]LOCTYP
+        ZSET_STA = 'A'
+        Goto SET_FIELD
+    Endif
+Endif
+End
+
+$DEF_SEL
+Read [ZSL2] first # read the defacult loation check that it is not in use
+If Fstat
+    Goto LOC_SEL
+Else
+    ZSET_LOC = [ZSl2]LOC
+    ZSET_LOCTYP = [ZSL2]LOCTYP
+    ZSET_STA = 'A'
+    Goto SET_FIELD
+Endif
+End
+
+$LOC_SEL
+Read [ZSL] first # Read the first available open location
+If Fstat
+    Infbox 'No locations available'
+    End
+Else
+    ZSET_LOC = [ZSL]LOC
+    ZSET_LOCTYP = [ZSL]LOCTYP
+    ZSET_STA = 'A'
+    Goto SET_FIELD
+Endif
+End
+
+$SET_FIELD
+If VALEUR <> 'DEF' & VALEUR <>'DAM' & VALEUR <> ''
+    [M:SRH1]STA(NOL) = ZSET_STA : Affzo [M:SRH1]STA(NOL)
+    [M:SRH1]LOCTYP(NOL) = ZSET_LOCTYP : Affzo [M:SRH1]LOCTYP(NOL)
+    [M:SRH1]LOC(NOL) = ZSET_LOC : Affzo [M:SRH1]LOC(NOL)
+    [M:SRH1]RTNCNOFLG(NOL) = 2 : Affzo [M:SRH1]RTNCNOFLG(NOL)
+    If VALEUR = 'MOT'
+        Read [ZPPL]PPL0 ='T20';[M:SRH1]ITMREF(NOL)
+        If !Fstat
+            [M:SRH1]PRIORD(NOL) = [F:ZPPL]PRI(0)
+            Affzo [M:SRH1]PRIORD(NOL)    
+        Endif        
+    Endif
+Else
+    [M:SRH1]RTNSTOUPD(NOL) = 1 : Affzo [M:SRH1]RTNSTOUPD(NOL)
+    [M:SRH1]RTNCNOFLG(NOL) = 2 : Affzo [M:SRH1]RTNCNOFLG(NOL)
+Endif
+
+Raz ZSET_LOC, ZSET_LOCTYP, ZSET_STA, ZLRES
+End
+
+######################################################################################
+## Ask user to print RMA if created under DC30, DC33 or DC52                        ##
+## Created: 07-31.23                                                                ##
+## Author: Zoey Mattison                                                            ##
+######################################################################################
+
+$PRINTRTN
+Local Char TBPAR_BP(15)(1..50),TBVAL_BP(30)(1..50) 
+Local Integer YN : YN = 2
+	If ([M:SRH0]STOFCY = 'DC30' | [M:SRH0]STOFCY = 'DC52' | [M:SRH0]STOFCY = 'DC33')
+		Call OUINON('Print RMA to Warehouse?', YN) From GESECRAN
+		If YN = 2
+			TBPAR_BP(1) = "transferdeb" : TBVAL_BP(1) = [M:SRH0]SRHNUM
+			Call ETAT("BONRETLIV","PICKTICK1","",0,"",TBPAR_BP,TBVAL_BP) From AIMP3
+		Endif
+	Endif
+Return
+
+$ZCANCEL
+If ([M:SRH0]STOFCY = 'DC30' OR [M:SRH0]STOFCY = 'DC31') AND GUSER <> 'MOAT' AND GUSER <> 'MORHB'
+    Local Integer ZQTY
+    Local Integer OKCAN : OKCAN = 1
+    For i = 0 to [M:SRH1]NBLIG-1
+        If [M:SRH1]QTY(i) > 0
+            ZQTY = ZQTY + [M:SRH1]QTY(i)
+        Endif
+    Next
+
+    If ZQTY > 0
+        Call AVERTIR('Warning! A return quantity was entered for a warehouse return!', OKCAN) From GESECRAN
+        If OKCAN = 1
+            OK = 0 : Return
+        Endif
+    Endif
+Endif
+Return
+
+Subprog AS_RTNREN(VALEUR)
+Variable Char    VALEUR()
+Local Integer NOL : NOL = nolign-1
+If (GUSER = 'MOAT' OR GUSER = 'MORHB' OR GUSER = 'MOZM') AND [M:SRH1]QTY > 0
+    [M:SRH1]LOCTYP(NOL) = 'WHSM' : Affzo [M:SRH1]LOCTYP(NOL)
+    [M:SRH1]LOC(NOL) = 'XMACHIN' : Affzo [M:SRH1]LOC(NOL)
+    [M:SRH1]STA(NOL) = 'A' : Affzo [M:SRH1]STA(NOL)
+    [M:SRH1]RTNCNOFLG(NOL) = 2 : Affzo [M:SRH1]RTNCNOFLG(NOL)
+Endif
+End
+
+Subprog AP_QTY(VALEUR)
+Variable Decimal VALEUR
+Local Integer NOL : NOL = nolign-1
+If (GUSER = 'MOAT' OR GUSER = 'MORHB' OR GUSER = 'MOZM') AND VALEUR > 0
+    [M:SRH1]RTNREN(NOL) = 'MOT' : Affzo [M:SRH1]RTNREN(NOL)
+Endif
+End
+
+
+
+
+

@@ -1,0 +1,39 @@
+$ACTION
+Case ACTION
+  When "SETBOUT" : Gosub SETBOUT
+  When "VERIF_CRE" : Gosub VERIF_CRE
+  When default
+Endcase
+Return
+
+Subprog AS_PIVTYP(VALEUR)
+Variable Char    VALEUR()
+[M:BIS0]PIVTYP = 'DIR' : Affzo [M:BIS0]PIVTYP
+End
+
+$SETBOUT
+Local File PINVOICE[ZPI]
+Columns [ZPI] (NUM, PAZ)
+If [M:BIS0]NUM<>""
+  Read [ZPI]PIH0 = [M:BIS0]NUM
+  If !Fstat
+    If [F:ZPI]PAZ <> 4
+      CHMEN+="GO"
+      If val(func AFNC.INTFLD("AUTILIS","ZPAYAUT",GUSER))=2
+        CHMEN+="Gz"
+      Endif
+    Endif
+  Endif
+Endif
+LogicClose File [ZPI]
+Return
+
+
+VERIF_CRE
+If func AFNC.INTFLD("BPSUPPLIER","ZBPSAPP",[M:BIS0]BPR) <> "" and ([M:BIS0]PIVTYP = "DIR" OR [M:BIS0]PIVTYP = "INV")
+  [M:BIS1]XFLGPAZ = 1
+Else
+  [M:BIS1]XFLGPAZ = 4
+Endif
+Affzo [M:BIS1]XFLGPAZ
+Return

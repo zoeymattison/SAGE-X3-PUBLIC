@@ -1,0 +1,155 @@
+$ACTION
+Case ACTION
+ When "STYLE" : gosub STYLE
+ When "VERIF_CRE" : gosub VERIF_CRE
+ When "VERIF_MOD" : gosub VERIF_MOD
+ When "AP_IMPRIME" : Gosub PRINT
+ When default
+Endcase
+Return
+
+Subprog AP_TSSCOD(VALEUR)
+Variable Char    VALEUR()
+End
+
+Subprog AP_YEXPDAT(VALEUR)
+Variable Date    VALEUR
+local integer i : i= [M:POH2]NBLIG
+local integer needUpdate : needUpdate = 0
+Local Integer YN : YN = 2 :# By default points on Yes
+
+if num$(VALEUR) <> "00/00/0000" 
+    for i = 0 to [M:POH2]NBLIG - 1
+       if [M:POH2]EXTRCPDAT(i) <> VALEUR and [M:POH2]LINCLEFLG(i) < 2
+         needUpdate = 1
+         break 
+       endif
+    next 
+endif
+if needUpdate = 1
+    Call OUINON("Do you want to update all lines with new expected receive date?", YN) From GESECRAN
+   if YN = 2
+       for i = 0 to [M:POH2]NBLIG - 1
+          if [M:POH2]EXTRCPDAT(i) <> VALEUR and [M:POH2]LINCLEFLG(i) < 2
+             [M:POH2]EXTRCPDAT(i) = VALEUR
+             Affzo [M:POH2]EXTRCPDAT(i) 
+          endif
+       next
+    endif 
+endif
+End
+
+Subprog AS_EXTRCPDAT(VALEUR)
+Variable Date    VALEUR
+local integer i : i = nolign - 1
+if [M:POH0]YEXPDAT <> VALEUR and num$([M:POH0]YEXPDAT) <> "00/00/0000"
+    VALEUR = [M:POH0]YEXPDAT
+    [M:POH2]EXTRCPDAT(i) = VALEUR
+    Affzo [M:POH2]EXTRCPDAT(i)
+endif
+End
+
+Subprog AP_ITMREF(VALEUR)
+Variable Char    VALEUR()
+Local Char ZSITE : ZSITE = [M:POH0]BPSNUM
+Local Char ZSTA : ZSTA = func AFNC.INTFLD('ITMMASTER','TSICOD(0)',VALEUR)
+
+If ZSITE = 'IDC30' OR ZSITE = 'IDC52' OR ZSITE = 'IDC33'
+	ZSITE = right$([M:POH0]BPSNUM,2)
+Endif
+
+If !Clalev([ZITF]) : Local File ITMFACILIT[ZITF] : Endif
+
+If func AFNC.INTFLD('ITMMVT','PHYSTO',VALEUR+'~'+[M:POH0]POHFCY) <> ''
+If ZSTA = 'DS' OR ZSTA = 'DM'
+	If pat(ZSITE, 'V*')<>1
+		Read [ZITF]ITF0 = VALEUR;ZSITE
+		If fstat = 0
+			 Infbox('Warning: '+VALEUR+' is discontinued! The available quantity in '+ZSITE+' is '+num$(func AFNC.INTFLD('ITMMVT','PHYSTO',VALEUR+'~'+ZSITE)))
+		Else Call ERREURT(ZSITE+': No product-site found for this product!', 1) From GESECRAN : Endif
+	Else Infbox('Warning: '+VALEUR+' is discontinued!') : Endif
+Endif
+Endif
+
+[M:POH2]YITMBPS(nolign-1)=func AFNC.INTFLD('ITMBPS','ITMREFBPS',VALEUR+'~'+[M:POH0]BPSNUM)
+[M:POH2]ZITMSTA(nolign-1)=ZSTA
+Affzo [M:POH2]YITMBPS(nolign-1)
+Affzo [M:POH2]ZITMSTA(nolign-1)
+End
+
+$STYLE
+local integer i 
+       for i = 0 to [M:POH2]NBLIG - 1
+        [M:POH2]YITMBPS(i)=func AFNC.INTFLD('ITMBPS','ITMREFBPS',[M:POH2]ITMREF(i)+'~'+[M:POH0]BPSNUM)
+        [M:POH2]ZITMSTA(i)=func AFNC.INTFLD('ITMMASTER','TSICOD(0)',[M:POH2]ITMREF(i))
+        Affzo [M:POH2]YITMBPS(i)
+        Affzo [M:POH2]ZITMSTA(i)
+       next
+Return
+
+Subprog AP_ZSTOFCY(VALEUR)
+Variable Char    VALEUR()
+Local Integer YN : YN = 2
+Local Char ZADD
+
+If VALEUR <> '' AND [M:POH0]POHNUM <> ''
+    If find(VALEUR, GSITE)
+        Call OUINON('Update receiving site of all available lines to '+VALEUR+'?', YN) From GESECRAN
+        if !Clalev([ZBP]) : Local File BPADDRESS[ZBP] : Endif
+        Filter [ZBP] Where BPANUM = VALEUR and BPAADDFLG = 2
+        Read [ZBP] first
+        ZADD = [ZBP]BPAADD
+        If YN = 2
+            For i = 0 to [M:POH2]NBLIG-1
+                If [M:POH2]LINCLEFLG(i) < 2 and FUNC AFNC.INTFLD('ITMFACILIT','AUUID',[M:POH2]ITMREF(i)+'~'+VALEUR) <> '' and [M:POH2]PRHFCY(i) <> VALEUR
+                    [M:POH2]PRHFCY(i) = VALEUR : Affzo [M:POH2]PRHFCY(i)
+                    [M:POH2]FCYADD(i) = ZADD : Affzo [M:POH2]FCYADD(i)
+                Endif
+            next
+            zonsui = "[M:POH1]ORDREF"
+        Else
+            Raz [M:POH0]ZSTOFCY : Affzo [M:POH0]ZSTOFCY : Raz VALEUR : End
+        Endif
+    Endif
+Raz [M:POH0]ZSTOFCY : Affzo [M:POH0]ZSTOFCY
+Raz VALEUR
+Endif
+End
+
+$VERIF_CRE
+If [M:POH0]BETFCY = 2
+  [M:POH0]ZPOSTA = 2
+Else 
+ [M:POH0]ZPOSTA = 1
+Endif
+Affzo [M:POH0]ZPOSTA
+
+If GFONCTION = 'GESPOH'
+  Raz [M:ZPOH]
+  Affzo [M:ZPOH]
+Endif
+return
+
+$PRINT
+If GFONCTION = 'GESPOH' and func AFNC.INTFLD("PORDER","PRNFLG",[M:POH0]POHNUM) = num$(2) and func AFNC.INTFLD("PORDER","ZPOSNU",[M:POH0]POHNUM) = '' and GUSER = 'MOZM'
+  Global Char ZG_POHNUM : [V]ZG_POHNUM = [M:POH0]POHNUM
+  Local Integer TYPEVT : TYPEVT = 1				
+  Local Char CODEVT : CODEVT = "ZPR"				
+  Local Char OPERAT : OPERAT = ""					
+  Local Char CLEOBJ : CLEOBJ = ""
+  Call WORKFLOW(TYPEVT,CODEVT,OPERAT,CLEOBJ) From AWRK
+Endif
+Return
+
+$VERIF_MOD
+If GFONCTION = 'GESPOH'
+If !Clalev([ZPO]) : Local File PORDER[ZPO] : Endif
+Read [ZPO]POH0 = [M:POH0]POHNUM
+If [F:ZPO]ZPOSTA = 1 and [M:POH0]ZPOSTA = 2
+[M:ZPOH]ZPOAPU = GNOMUSER
+[M:ZPOH]ZPOAPD = date$
+Affzo [M:ZPOH]ZPOAPD
+Affzo [M:ZPOH]ZPOAPU
+Endif
+Endif
+Return
