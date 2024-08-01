@@ -11,7 +11,7 @@ $ACTION
 Return
 
 $OUVRE
-If GUSER <> "MOZM" : Infbox "Under development" : Gosub FIN from GSAISIE : Endif
+#If GUSER <> "MOZM" : Infbox "Under development" : Gosub FIN from GSAISIE : Endif
 Global Integer ZG_MODCNT
 Local Char ZL_BPSNUM(100)(1..2)
 Local Integer ZL_OK
