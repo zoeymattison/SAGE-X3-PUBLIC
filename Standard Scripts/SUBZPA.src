@@ -3,20 +3,23 @@ $ACTION
     Case ACTION
         When "OUVRE" : Gosub OUVRE
         When "DEBUT" : Gosub DEBUT
-        When "OK"    : Gosub OK
+        When "OK" : Gosub OK
+        When "AP_CHOIX" : Gosub AP_CHOIX
         When "END"   : Gosub ZEND
         When default
     Endcase
 Return
 
 $OUVRE
+If GUSER <> "MOZM" : Infbox "Under development" : Gosub FIN from GSAISIE : Endif
+Global Integer ZG_MODCNT
 Local Char ZL_BPSNUM(100)(1..2)
-Local Integer OK
+Local Integer ZL_OK
 Local Char ZL_LINPUT(100)
 Local Char ZL_TITLE : [L]ZL_TITLE = 'Selection criteria'
 Local Char ZL_FLDTIT : [L]ZL_FLDTIT = 'BP Supplier'
-Call SAICAR([L]ZL_LINPUT,[L]ZL_TITLE,[L]ZL_FLDTIT,'BPS',0,0,'',[L]OK) From GESECRAN
-if [L]OK = 1 : Gosub FIN from GSAISIE : Endif
+Call SAICAR([L]ZL_LINPUT,[L]ZL_TITLE,[L]ZL_FLDTIT,'BPS',0,0,'',[L]ZL_OK) From GESECRAN
+if [L]ZL_OK = 1 : Gosub FIN from GSAISIE : Endif
 [L]ZL_BPSNUM(1) = [L]ZL_LINPUT
 If [L]ZL_BPSNUM(1) = ''
     [L]ZL_BPSNUM(1) = 'V0'
@@ -27,6 +30,13 @@ Endif
 Return
 
 $DEBUT
+Call OUVRE_TRACE("PO Approval Log for "+num$(date$)) from LECFIC
+Call ECR_TRACE("GENERATION OF PO APPROVALS",0) From GESECRAN
+Call ECR_TRACE("----------------------------",0) From GESECRAN
+Gosub RELOAD
+Return
+
+$RELOAD
 Local File PORDER[ZPO]
 Local Shortint NOL
 Columns [ZPO] (CREDAT, POHNUM, POHFCY, BPSNUM, ZPOSTA, TOTORD, TTVORD, CREUSR, CUR, CLEFLG, BETFCY, BPRPAY)
@@ -52,21 +62,53 @@ Next
 Call TEMPOFF From GESECRAN
 [M:ZPA]NBLIG = [L]NOL-1
 If [M:ZPA]NBLIG=0
-  GMESSAGE=mess(99,100,1) : GERR=1 : FIN=1
+    Infbox "No records found!"
+    Columns [ZPO]
+    LogicClose File [ZPO]
+    Gosub FIN from GSAISIE
 Endif
 Affzo [ZPA]1-500
 Columns [ZPO]
 LogicClose File [ZPO]
-Call OUVRE_TRACE("PO Approval Log for "+num$(date$)) from LECFIC
-Call ECR_TRACE("GENERATION OF PO APPROVALS",0) From GESECRAN
-Call ECR_TRACE("----------------------------",0) From GESECRAN
+Return
+
+$AP_CHOIX
+#Infbox num$(REPONSE)
+Local Integer ZI_3
+Case num$(REPONSE)
+    When num$(2001) : [L]ZI_3 = 2 : Gosub APP_SEL
+    When num$(2002) : [L]ZI_3 = 1 : Gosub APP_SEL
+Endcase
+Return
+
+$APP_SEL
+For i = 0 to [M:ZPA]NBLIG-1
+    [M:ZPA]ZPOSTA(i) = [L]ZI_3
+    Affzo [M:ZPA]ZPOSTA(i)
+Next
+Raz [L]ZI_3
 Return
 
 $OK
+Local Integer ZI_4 : [L]ZI_4 = 0
+For i = 0 to [M:ZPA]NBLIG-1
+    if [M:ZPA]ZPOSTA(i) = 2
+        [L]ZI_4 += 1
+    Endif
+Next
+If [L]ZI_4 = 0 : Infbox "No records have been selected for approval!" : FIN = 0 : Return : Endif
+Gosub APPROVE
+Gosub RELOAD
+FIN = 0
+Return
+
+$APPROVE
+#Infbox num$([M:ZPA]ZPOSTA(0))
 Local Integer ZI : [L]ZI = 0
 Local File PORDER[ZPO]
 Columns [ZPO] (POHNUM, ZPOSTA, ZPOAPD, ZPOAPU)
 For i = 0 to [M:ZPA]NBLIG-1
+    #Infbox "Inside"
     If [M:ZPA]ZPOSTA(i) = 2
         Read [ZPO]POH0 = [M:ZPA]POHNUM(i)
         If ![S]Fstat
@@ -76,12 +118,13 @@ For i = 0 to [M:ZPA]NBLIG-1
             [F:ZPO]ZPOAPU = func AFNC.NOMUSER(GUSER)
             Rewrite [ZPO]
             If ![S]Fstat
-                Call ECR_TRACE([F:ZPO]POHNUM+" successfully Approved",0) From GESECRAN
+                Call ECR_TRACE([F:ZPO]POHNUM+" successfully approved",0) From GESECRAN
                 #Infbox 'Commit'
                 Commit
                 [L]ZI+=1
+                [V]ZG_MODCNT += 1
             Else
-                Call ECR_TRACE([F:ZPO]POHNUM+" approval failed due to one or more errors.",0) From GESECRAN
+                Call ECR_TRACE([F:ZPO]POHNUM+" approval failed due to one or more errors",0) From GESECRAN
                 #Infbox 'Rollback'
                 Rollback
                 [L]ZI+=1
@@ -91,11 +134,10 @@ For i = 0 to [M:ZPA]NBLIG-1
 Next
 Columns [ZPO]
 LogicClose File [ZPO]
-Call FERME_TRACE FROM LECFIC
-If [L]ZI = 0 : Infbox "No records selected for approval!" : FIN = 0 : Return : Endif
-Call LEC_TRACE() FROM LECFIC
 Return
 
 $ZEND
 Call FERME_TRACE FROM LECFIC
+If [V]ZG_MODCNT > 0 : Call LEC_TRACE() FROM LECFIC : Endif
+Raz [V]ZG_MODCNT
 Return
