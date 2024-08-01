@@ -1,11 +1,29 @@
 $ACTION
 #If GUSER="MOZM" : Infbox ACTION : Endif
     Case ACTION
+        When "OUVRE" : Gosub OUVRE
         When "DEBUT" : Gosub DEBUT
-        When "OK" : Gosub OK
-        When "END" : Gosub ZEND
+        When "OK"    : Gosub OK
+        When "END"   : Gosub ZEND
         When default
     Endcase
+Return
+
+$OUVRE
+Local Char ZL_BPSNUM(100)(1..2)
+Local Integer OK
+Local Char ZL_LINPUT(100)
+Local Char ZL_TITLE : [L]ZL_TITLE = 'Selection criteria'
+Local Char ZL_FLDTIT : [L]ZL_FLDTIT = 'BP Supplier'
+Call SAICAR([L]ZL_LINPUT,[L]ZL_TITLE,[L]ZL_FLDTIT,'BPS',0,0,'',[L]OK) From GESECRAN
+if [L]OK = 1 : Gosub FIN from GSAISIE : Endif
+[L]ZL_BPSNUM(1) = [L]ZL_LINPUT
+If [L]ZL_BPSNUM(1) = ''
+    [L]ZL_BPSNUM(1) = 'V0'
+    [L]ZL_BPSNUM(2) = 'V9999999'
+Else
+    [L]ZL_BPSNUM(2) = [L]ZL_LINPUT
+Endif
 Return
 
 $DEBUT
@@ -15,7 +33,7 @@ Columns [ZPO] (CREDAT, POHNUM, POHFCY, BPSNUM, ZPOSTA, TOTORD, TTVORD, CREUSR, C
 Raz [M:ZPA]
 [L]NOL = 1
 Call TEMPON("R") From GESECRAN
-For [ZPO] Where ZPOSTA = 1 and CLEFLG = 1 and BETFCY = 1 and BPRPAY = 'V5555'
+For [ZPO] Where ZPOSTA = 1 and CLEFLG = 1 and BETFCY = 1 and BPSNUM >= [L]ZL_BPSNUM(1) and BPSNUM <= [L]ZL_BPSNUM(2)
     [M:ZPA]ZPOSTA(NOL-1) = [F:ZPO]ZPOSTA
     [M:ZPA]CREDAT(NOL-1) = [F:ZPO]CREDAT
     [M:ZPA]POHNUM(NOL-1) = [F:ZPO]POHNUM
@@ -74,7 +92,7 @@ Next
 Columns [ZPO]
 LogicClose File [ZPO]
 Call FERME_TRACE FROM LECFIC
-If [L]ZI = 0 : Return : Endif
+If [L]ZI = 0 : Infbox "No records selected for approval!" : FIN = 0 : Return : Endif
 Call LEC_TRACE() FROM LECFIC
 Return
 
