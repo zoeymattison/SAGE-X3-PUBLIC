@@ -2,7 +2,9 @@ $ACTION
 Case ACTION
  When "STYLE" : gosub STYLE
  When "VERIF_CRE" : gosub VERIF_CRE
+ When "CREATION" : Gosub Z_COUNTERS
  When "VERIF_MOD" : gosub VERIF_MOD
+ When "MODIF" : Gosub Z_COUNTERS
  When "AP_IMPRIME" : Gosub PRINT
  When default
 Endcase
@@ -152,4 +154,25 @@ Affzo [M:ZPOH]ZPOAPD
 Affzo [M:ZPOH]ZPOAPU
 Endif
 Endif
+Return
+
+$Z_COUNTERS
+Local Integer ZL_OK
+Local Integer ZL_ABC
+For i = 0 to [M:POH2]NBLIG-1
+    If func AFNC.INTFLD("ITMMASTER","TSICOD(0)",[M:POH2]ITMREF(i)) = "OK"
+        [L]ZL_OK += 1
+    Endif
+    If func AFNC.INTFLD("ITMFACILIT","ABCCLS",[M:POH2]ITMREF(i)+'~'+[M:POH2]PRHFCY(i)) = num$(1)
+        [L]ZL_ABC += 1
+    Endif
+Next
+
+Local File ZDOCDATA
+[F:ZDD]ZNAME = [M:POH0]POHNUM
+[F:ZDD]ZTYPE = num$([L]ZL_OK)
+[F:ZDD]ZNUM = num$([L]ZL_ABC)
+Write [ZDD]
+LogicClose File [ZDD]
+Raz [L]ZL_OK, [L]ZL_ABC
 Return
