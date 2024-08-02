@@ -12,7 +12,7 @@ Return
 
 $OUVRE
 #If GUSER <> "MOZM" : Infbox "Under development" : Gosub FIN from GSAISIE : Endif
-Global Integer ZG_MODCNT
+Global Integer ZG_MODCNT : [V]ZG_MODCNT = 0
 Local Char ZL_BPSNUM(100)(1..2)
 Local Integer ZL_OK
 Local Char ZL_LINPUT(100)
@@ -37,6 +37,8 @@ Gosub RELOAD
 Return
 
 $RELOAD
+[M:ZPAH]ZQTYUPD = [V]ZG_MODCNT
+Affzo [M:ZPAH]ZQTYUPD
 Local File PORDER[ZPO]
 Local Shortint NOL
 Columns [ZPO] (CREDAT, POHNUM, POHFCY, BPSNUM, ZPOSTA, TOTORD, TTVORD, CREUSR, CUR, CLEFLG, BETFCY, BPRPAY)
@@ -60,16 +62,14 @@ For [ZPO] Where ZPOSTA = 1 and CLEFLG = 1 and BETFCY = 1 and BPSNUM >= [L]ZL_BPS
     Endif
 Next
 Call TEMPOFF From GESECRAN
+Columns [ZPO]
+LogicClose File [ZPO]
 [M:ZPA]NBLIG = [L]NOL-1
 If [M:ZPA]NBLIG=0
-    Infbox "No records found!"
-    Columns [ZPO]
-    LogicClose File [ZPO]
+    Infbox "No more records avaulable!"
     Gosub FIN from GSAISIE
 Endif
 Affzo [ZPA]1-500
-Columns [ZPO]
-LogicClose File [ZPO]
 Return
 
 $AP_CHOIX
