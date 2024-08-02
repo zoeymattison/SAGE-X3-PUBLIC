@@ -66,7 +66,9 @@ Columns [ZPO]
 LogicClose File [ZPO]
 [M:ZPA]NBLIG = [L]NOL-1
 If [M:ZPA]NBLIG=0
-    Infbox "No more records avaulable!"
+    Infbox "No more records available!"
+    Call FERME_TRACE FROM LECFIC
+    If [V]ZG_MODCNT > 0 : Call LEC_TRACE() FROM LECFIC : Endif
     Gosub FIN from GSAISIE
 Endif
 Affzo [ZPA]1-500
@@ -106,7 +108,7 @@ $APPROVE
 #Infbox num$([M:ZPA]ZPOSTA(0))
 Local Integer ZI : [L]ZI = 0
 Local File PORDER[ZPO]
-Columns [ZPO] (POHNUM, ZPOSTA, ZPOAPD, ZPOAPU)
+Columns [ZPO] (POHNUM, ZPOSTA, ZPOAPD, ZPOAPU, BPSNUM)
 For i = 0 to [M:ZPA]NBLIG-1
     #Infbox "Inside"
     If [M:ZPA]ZPOSTA(i) = 2
@@ -118,13 +120,13 @@ For i = 0 to [M:ZPA]NBLIG-1
             [F:ZPO]ZPOAPU = func AFNC.NOMUSER(GUSER)
             Rewrite [ZPO]
             If ![S]Fstat
-                Call ECR_TRACE([F:ZPO]POHNUM+" successfully approved",0) From GESECRAN
+                Call ECR_TRACE([F:ZPO]BPSNUM+' - '+func AFNC.INTFLD("BPSUPPLIER","BPSNAM",[F:ZPO]BPSNUM)+': '+[F:ZPO]POHNUM+" successfully approved",0) From GESECRAN
                 #Infbox 'Commit'
                 Commit
                 [L]ZI+=1
                 [V]ZG_MODCNT += 1
             Else
-                Call ECR_TRACE([F:ZPO]POHNUM+" approval failed due to one or more errors",0) From GESECRAN
+                Call ECR_TRACE([F:ZPO]BPSNUM+' - '+func AFNC.INTFLD("BPSUPPLIER","BPSNAM",[F:ZPO]BPSNUM)+': '+[F:ZPO]POHNUM+" approval failed due to one or more errors",0) From GESECRAN
                 #Infbox 'Rollback'
                 Rollback
                 [L]ZI+=1
