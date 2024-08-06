@@ -11,33 +11,42 @@ $ACTION
 Return
 
 $OUVRE
-#If GUSER <> "MOZM" : Infbox "Under development" : Gosub FIN from GSAISIE : Endif
-Global Integer ZG_MODCNT : [V]ZG_MODCNT = 0
-Local Char ZL_BPSNUM(100)(1..2)
-Local Integer ZL_OK
-Local Char ZL_LINPUT(100)
-Local Char ZL_TITLE : [L]ZL_TITLE = 'Selection criteria'
-Local Char ZL_FLDTIT : [L]ZL_FLDTIT = 'BP Supplier'
-Call SAICAR([L]ZL_LINPUT,[L]ZL_TITLE,[L]ZL_FLDTIT,'BPS',0,0,'',[L]ZL_OK) From GESECRAN
-if [L]ZL_OK = 1 : Gosub FIN from GSAISIE : Endif
-[L]ZL_BPSNUM(1) = [L]ZL_LINPUT
-If [L]ZL_BPSNUM(1) = ''
-    [L]ZL_BPSNUM(1) = 'V0'
-    [L]ZL_BPSNUM(2) = 'V9999999'
-Else
-    [L]ZL_BPSNUM(2) = [L]ZL_LINPUT
-Endif
 Return
 
 $DEBUT
+Local Integer ZL_STAGE : [L]ZL_STAGE = 0
+Local Integer ZG_MODCNT : [L]ZG_MODCNT = 0
+Local Char ZL_BPSNUM(100)(1..4)
 Call OUVRE_TRACE("PO Approval Log for "+num$(date$)) from LECFIC
 Call ECR_TRACE("GENERATION OF PO APPROVALS",0) From GESECRAN
 Call ECR_TRACE("----------------------------",0) From GESECRAN
+Gosub SET_ALL
 Gosub RELOAD
 Return
 
+$SET_ALL
+    [L]ZL_BPSNUM(1) = 'V0'
+    [L]ZL_BPSNUM(2) = 'V9999999'
+    [L]ZL_BPSNUM(3) = 'V0'
+    [L]ZL_BPSNUM(4) = 'V9999999'
+Return
+
+$SET_PAY
+    [L]ZL_BPSNUM(1) = 'V0'
+    [L]ZL_BPSNUM(2) = 'V9999999'
+    [L]ZL_BPSNUM(3) = [L]ZL_LINPUT
+    [L]ZL_BPSNUM(4) = [L]ZL_LINPUT
+Return
+
+$SET_BPS
+    [L]ZL_BPSNUM(1) = [L]ZL_LINPUT
+    [L]ZL_BPSNUM(2) = [L]ZL_LINPUT
+    [L]ZL_BPSNUM(3) = 'V0'
+    [L]ZL_BPSNUM(4) = 'V9999999'
+Return
+
 $RELOAD
-[M:ZPAH]ZQTYUPD = [V]ZG_MODCNT
+[M:ZPAH]ZQTYUPD = [L]ZG_MODCNT
 Affzo [M:ZPAH]ZQTYUPD
 Local File PORDER[ZPO]
 Local Shortint NOL
@@ -45,7 +54,7 @@ Columns [ZPO] (CREDAT, POHNUM, POHFCY, BPSNUM, ZPOSTA, TOTORD, TTVORD, CREUSR, C
 Raz [M:ZPA]
 [L]NOL = 1
 Call TEMPON("R") From GESECRAN
-For [ZPO] Where ZPOSTA = 1 and CLEFLG = 1 and BETFCY = 1 and BPSNUM >= [L]ZL_BPSNUM(1) and BPSNUM <= [L]ZL_BPSNUM(2)
+For [ZPO] Where ZPOSTA = 1 and CLEFLG = 1 and BETFCY = 1 and BPSNUM >= [L]ZL_BPSNUM(1) and BPSNUM <= [L]ZL_BPSNUM(2) and BPRPAY >= [L]ZL_BPSNUM(3) and BPRPAY <= [L]ZL_BPSNUM(4)
     [M:ZPA]ZPOSTA(NOL-1) = [F:ZPO]ZPOSTA
     [M:ZPA]CREDAT(NOL-1) = [F:ZPO]CREDAT
     [M:ZPA]POHNUM(NOL-1) = [F:ZPO]POHNUM
@@ -66,39 +75,64 @@ Columns [ZPO]
 LogicClose File [ZPO]
 [M:ZPA]NBLIG = [L]NOL-1
 If [M:ZPA]NBLIG=0
-    Infbox "No more records available!"
-    Call FERME_TRACE FROM LECFIC
-    If [V]ZG_MODCNT > 0 : Call LEC_TRACE() FROM LECFIC : Endif
-    Gosub FIN from GSAISIE
+    Infbox "No more records available for current selection!"
 Endif
 Affzo [ZPA]1-500
 Return
 
 $AP_CHOIX
 #Infbox num$(REPONSE)
-Local Integer ZI_3
 Case num$(REPONSE)
-    When num$(2001) : [L]ZI_3 = 2 : Gosub APP_SEL
-    When num$(2002) : [L]ZI_3 = 1 : Gosub APP_SEL
+    When num$(1801) : [L]ZL_STAGE = 1 : Gosub SEL_FILTER
+    When num$(1802) : [L]ZL_STAGE = 2 : Gosub SEL_FILTER
+    When num$(1803) : [L]ZL_STAGE = 0 : Gosub SET_ALL : Gosub RELOAD
+    When num$(2001) : [L]ZL_STAGE = 3 : Gosub APP_SEL
+    When num$(2002) : [L]ZL_STAGE = 4 : Gosub APP_SEL
 Endcase
 Return
 
+$SEL_FILTER
+Local Integer ZL_OK
+Local Char ZL_LINPUT(100)
+Local Char ZL_TITLE : [L]ZL_TITLE = 'Selection criteria'
+Local Char ZL_FLDTIT
+If [L]ZL_STAGE = 1 : [L]ZL_FLDTIT = 'Pay-to': Endif
+If [L]ZL_STAGE = 2 : [L]ZL_FLDTIT = 'Supplier': Endif
+Call SAICAR([L]ZL_LINPUT,[L]ZL_TITLE,[L]ZL_FLDTIT,'BPS',2,40,'',[L]ZL_OK) From GESECRAN
+If [L]ZL_OK = 2
+    If [L]ZL_LINPUT = ''
+        Gosub SET_ALL
+        Gosub RELOAD
+        Return
+    Endif
+    Case num$([L]ZL_STAGE)
+        When num$(1) : Gosub SET_PAY : Gosub RELOAD : Return
+        When num$(2) : Gosub SET_BPS : Gosub RELOAD : Return
+    Endcase
+Endif
+Return
+
 $APP_SEL
+Local Integer ZL_CHOIX
+Case num$([L]ZL_STAGE)
+    When num$(3) : [L]ZL_CHOIX = 2
+    When num$(4) : [L]ZL_CHOIX = 1
+Endcase
 For i = 0 to [M:ZPA]NBLIG-1
-    [M:ZPA]ZPOSTA(i) = [L]ZI_3
+    [M:ZPA]ZPOSTA(i) = [L]ZL_CHOIX
     Affzo [M:ZPA]ZPOSTA(i)
 Next
-Raz [L]ZI_3
+Raz [L]ZL_CHOIX
 Return
 
 $OK
-Local Integer ZI_4 : [L]ZI_4 = 0
+Local Integer ZL_INDICE1 : [L]ZL_INDICE1 = 0
 For i = 0 to [M:ZPA]NBLIG-1
     if [M:ZPA]ZPOSTA(i) = 2
-        [L]ZI_4 += 1
+        [L]ZL_INDICE1 += 1
     Endif
 Next
-If [L]ZI_4 = 0 : Infbox "No records have been selected for approval!" : FIN = 0 : Return : Endif
+If [L]ZL_INDICE1 = 0 : Infbox "No records have been selected for approval!" : FIN = 0 : Return : Endif
 Gosub APPROVE
 Gosub RELOAD
 FIN = 0
@@ -106,7 +140,6 @@ Return
 
 $APPROVE
 #Infbox num$([M:ZPA]ZPOSTA(0))
-Local Integer ZI : [L]ZI = 0
 Local File PORDER[ZPO]
 Columns [ZPO] (POHNUM, ZPOSTA, ZPOAPD, ZPOAPU, BPSNUM)
 For i = 0 to [M:ZPA]NBLIG-1
@@ -123,13 +156,11 @@ For i = 0 to [M:ZPA]NBLIG-1
                 Call ECR_TRACE([F:ZPO]BPSNUM+' - '+func AFNC.INTFLD("BPSUPPLIER","BPSNAM",[F:ZPO]BPSNUM)+': '+[F:ZPO]POHNUM+" successfully approved",0) From GESECRAN
                 #Infbox 'Commit'
                 Commit
-                [L]ZI+=1
-                [V]ZG_MODCNT += 1
+                [L]ZG_MODCNT += 1
             Else
                 Call ECR_TRACE([F:ZPO]BPSNUM+' - '+func AFNC.INTFLD("BPSUPPLIER","BPSNAM",[F:ZPO]BPSNUM)+': '+[F:ZPO]POHNUM+" approval failed due to one or more errors",0) From GESECRAN
                 #Infbox 'Rollback'
                 Rollback
-                [L]ZI+=1
             Endif
         Endif
     Endif
@@ -140,6 +171,5 @@ Return
 
 $ZEND
 Call FERME_TRACE FROM LECFIC
-If [V]ZG_MODCNT > 0 : Call LEC_TRACE() FROM LECFIC : Endif
-Raz [V]ZG_MODCNT
+If [L]ZG_MODCNT > 0 : Call LEC_TRACE() FROM LECFIC : Endif
 Return
