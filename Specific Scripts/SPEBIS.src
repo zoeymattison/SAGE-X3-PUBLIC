@@ -1,3 +1,8 @@
+# Mask management BIS0 (Specific)
+
+######################################################################################
+## Section automatically added (screen BIS0) 04/12/2024 12:03:40 (MOZM)
+######################################################################################
 $ACTION
 Case ACTION
   When "SETBOUT" : Gosub SETBOUT
@@ -37,3 +42,49 @@ Else
 Endif
 Affzo [M:BIS1]XFLGPAZ
 Return
+
+######################################################################################
+## Section automatically added (screen BIS1) 08/07/2024 08:53:56 (MOZM)
+######################################################################################
+Subprog AP_BPRVCR(VALEUR)
+Variable Char    VALEUR()
+if VALEUR <> ''
+    Local File PINVOICE[ZPI]
+    Columns [ZPI] (NUM, BPRVCR)
+    Filter [ZPI] Where BPRVCR = VALEUR
+    Read [ZPI] first
+    If ![S]Fstat
+        If [F:ZPI]BPR = [M:BIS0]BPR
+            GMESSAGE = "Supplier document "+[F:ZPI]BPRVCR+" already exists on "+[F:ZPI]NUM
+            mkstat = 2
+        Endif
+    Endif
+    Filter [ZPI]
+    Columns [ZPI]
+    LogicClose File [ZPI]
+Endif
+End
+
+
+######################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
